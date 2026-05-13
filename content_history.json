@@ -1,9 +1,0 @@
-{
-  "records": [],
-  "pillar_distribution": {"Market": 0.0, "Property": 0.0, "Story": 0.0},
-  "last_strategies": [],
-  "last_angles": [],
-  "max_history_window": 14,
-  "min_gap_same_strategy": 1,
-  "min_gap_same_angle": 3
-}
