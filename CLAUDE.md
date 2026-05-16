@@ -1,23 +1,40 @@
-# CLAUDE.md — 短视频脚本系统 v3.0
+# CLAUDE.md — 短视频脚本系统 v4.0
 
 ## 系统定位
 
-这是一个 **Claude Code 驱动的短视频脚本生产系统**。不再是 OpenClaw 技能。
+这是一个 **Claude Code 驱动的个人IP短视频生产系统**。
 
-- **Claude 负责**：创意决策 — 理解素材语义、定中心思想、写脚本、联网搜索、分析反馈
+- **Claude 负责**：创意决策 — 理解素材语义、定中心思想、写脚本、联网搜索、分析反馈、长期战略规划
 - **Python 负责**：数据计算 — 策略决策（3:4:3 支柱轮换）、记录存储、反馈分析、洞察生成
 
-目标用户：房产中介（高净值客户 / 千万级大标的）。产出物：1-2 分钟短视频口播脚本（Markdown），发布到小红书 / 视频号。
+**终极目标**：打造个人IP"杨静 = 上海改善置换专家"。主攻微信视频号 + 小红书。
+**北极星指标**：不是粉丝量，是**优质客户转化**——从视频到加微信到最终成交。
+
+## 长期战略：三阶段路线图
+
+| 阶段 | 时间 | 目标 | 当前状态 |
+|------|------|------|----------|
+| 验证期 | 第1-8周 | 找到"哪种内容吸引对的人" | **← 当前** |
+| 深耕期 | 第9-24周 | 把一个已验证模式做到极致 | 待进入 |
+| 破圈期 | 第25周+ | 从算法推荐到社交推荐 | 待进入 |
+
+**当前阶段重点**：
+- 每周至少1条视频收到有效私信（真实问房的人，非同行点赞）——这是北极星指标
+- 每5条做一次A/B测试（行家型 vs 避坑型 vs 陪伴型），找到最优风格组合
+- 不发没有定位的视频——每条发布前确认"这条视频会让观众记住我什么"
+
+**阶段切换判断**：当同时满足"有一条内容模式连续3条获得有效私信 + 对这个模式不再有选题焦虑 + 至少2-3个客户明确说看了视频才联系你"，可进入深耕期。
 
 ## 文件结构
 
 ```
-daily-video-script-1/
+daily-video-script/
 ├── CLAUDE.md                    # 本文件 — Claude 操作手册
 ├── SKILL.md                     # 保留作参考（原 OpenClaw 技能定义）
 ├── engine.py                    # ★ 策略引擎：status / record / analyze
 ├── viral_validator.py           # 9 维爆款验证器（27 分制）
 ├── pleasure_scorer.py           # 爽点评分器（12 分制）
+├── douyin_extractor.py          # 抖音视频文案提取（基础+ASR）
 ├── config/
 │   └── persona.json             # 人设配置（违禁词/偏好句式/金句库/价值观）
 ├── data/
@@ -25,8 +42,13 @@ daily-video-script-1/
 │   └── insights.json            # 引擎自动生成的规律发现
 ├── resources/
 │   └── inspiration_topics.json  # 话题弹药库（备用）
-├── generate_script.py           # [已废弃] 旧版模板拼接生成器
-└── persona_manager.py           # [已废弃] 逻辑已迁移到 engine.py
+├── memory/                      # ★ 长期记忆系统（四层）
+│   ├── layer1-identity/         # 我是谁：定位、核心观点
+│   ├── layer2-strategy/         # 我怎么打：内容模式、复盘、竞品
+│   ├── layer3-execution/        # 我做了什么：文案技巧、钩子库、金句记录
+│   └── layer4-feedback/         # 外界反应：客户咨询来源
+├── generate_script.py           # [已废弃]
+└── persona_manager.py           # [已废弃]
 ```
 
 ## 人设铁律（每次生成必遵）
@@ -49,9 +71,15 @@ daily-video-script-1/
 
 ## 每日工作流程
 
+### 0. 战略对齐（每次生成前必做）
+在开始写脚本之前，先读 `memory/layer1-identity/positioning.md` 确认当前定位。
+问自己：今天这条视频发布后，观众会记住"杨静 = 什么"？
+如果这条视频换个其他中介来念也没区别 → 说明定位没体现 → 换个角度。
+
 ### 1. 获取方向
 用户可能提供素材（一段文字 / 一个链接 / 一个话题），也可能只说"生成今日脚本"。
 如果用户没给素材，先问他要方向或素材。
+如果用户给了一个抖音链接，用 `python douyin_extractor.py <链接> --asr` 提取完整口播文案学习参考。
 
 ### 2. 跑引擎看状态
 ```bash
@@ -67,6 +95,8 @@ python engine.py status
 3. **锁定中心思想**：用一句话写出核心论点。必须是可争论的判断，不能是"买房要看户型"这类废话。
 
 格式：`【中心思想】xxx`
+
+**中心思想质量检查**：这个论点能否在 `memory/layer1-identity/core-thesis.md` 中占一个位置？如果太浅、太泛、太像废话 → 重想。
 
 ### 4. 写脚本
 
@@ -89,6 +119,8 @@ python engine.py status
 
 字数：300-500 字（约 60-90 秒口播）
 
+**写法参考**：生成前读 `memory/layer3-execution/copywriting-techniques.md` 中的自查清单。
+
 ### 5. 跑验证器
 ```python
 from viral_validator import ViralScriptValidator
@@ -102,12 +134,18 @@ from viral_validator import ViralScriptValidator
 跑 `python engine.py record` 或直接更新 `data/history.json`。
 脚本保存到桌面：`C:\Users\杨静\Desktop\daily-script-YYYY-MM-DD.md`
 
+### 8. 更新记忆（每次生成后）
+- 如果今天用了新钩子且效果好，追加到 `memory/layer3-execution/hook-library.md`
+- 如果用了金句，更新 `memory/layer3-execution/golden-sentence-log.md` 的使用次数
+- 如果产生了一个新的核心观点，添加到 `memory/layer1-identity/core-thesis.md`
+
 ## 反馈录入
 
 用户发布后把数据告诉你，执行：
 
 1. 更新 `data/history.json` 中对应日期的 `performance` 字段
-2. 当积累 ≥3 条已发布数据后，跑 `python engine.py analyze` 看洞察
+2. **新增**：如果用户告知有客户通过某条视频来咨询，记录到 `memory/layer4-feedback/client-inquiry-log.md`
+3. 当积累 ≥3 条已发布数据后，跑 `python engine.py analyze` 看洞察
 
 ## 每周复盘
 
@@ -116,6 +154,13 @@ from viral_validator import ViralScriptValidator
 - 哪种时长完播率最好
 - 趋势在往上还是往下
 - 下周策略建议
+
+**每4周深度复盘**：在每周复盘基础上，额外做以下检查：
+- 读 `memory/layer1-identity/positioning.md`：定位是否需要修正？
+- 读 `memory/layer4-feedback/client-inquiry-log.md`：哪种视频带来的客户质量最高？
+- 读 `memory/layer2-strategy/competitor-tracker.md`：赛道有没有值得关注的变化？
+- 将复盘结论写入 `memory/layer2-strategy/phase-review.md`
+- 判断是否需要阶段切换（验证期→深耕期→破圈期）
 
 ## 写脚本的核心原则
 
