@@ -46,10 +46,19 @@ class VideoEngine:
 
     def _default_persona(self):
         return {
-            "name": "专业买手·参谋",
-            "core_lanes": ["专业筛选", "避坑指南"],
-            "secondary_lanes": ["反差拒绝"],
-            "disabled_lanes": ["捡漏机会", "数据对比"],
+            "name": "佳佳 — 上海改善置换顾问",
+            "role": "帮改善家庭把复杂买房决策拆成一步一步看清楚的私人顾问",
+            "ip_positioning": {
+                "one_liner": "帮上海改善家庭，把复杂的买房决策拆成一步一步看清楚，不催单、不推销，但每一句都有依据",
+                "direction_weights": {"陪伴型": 9, "行家型": 4, "避坑型": 4, "资源型": 4},
+                "direction_to_lane": {"陪伴型": "陪伴决策", "行家型": "专业分析", "避坑型": "避坑指南", "资源型": "资源推荐"},
+                "core_districts": ["长宁·天山", "长宁·古北", "长宁·中山公园"],
+                "extended_districts": ["普陀", "闵行", "静安"],
+                "budget_range": "1000万-1500万（核心），上限约2000万",
+                "target_audience": "外地父母给上海的孩子买房为主"
+            },
+            "core_lanes": ["陪伴决策", "专业分析", "避坑指南"],
+            "secondary_lanes": ["资源推荐"],
             "language_style": "朋友聊天式",
             "forbidden_words": [
                 "家人们", "绝绝子", "震惊", "重磅", "赶紧", "手慢无",
@@ -59,11 +68,19 @@ class VideoEngine:
                 "我建议", "我觉得", "你可以考虑", "不妨看看",
                 "如果不介意", "说实话", "说白了", "其实就一点"
             ],
+            "tone_markers": {
+                "soft_starters": ["最近", "前两天", "今天", "刚帮一个客户"],
+                "opinion_markers": ["说实话", "我觉得", "其实", "说白了"],
+                "sharing_markers": ["分享一个", "说个真实的", "跟你说个事"],
+                "no_pressure_markers": ["不着急", "可以先了解", "买不买无所谓", "看看也不吃亏"],
+                "companion_markers": ["一步步来", "不着急", "我陪你看", "慢慢梳理", "咱们一起看看"]
+            },
             "core_values": [
                 "不催单，帮客户筛选而非推销",
                 "用真实数据说话，不编造",
                 "承认不完美，没有十全十美的房子",
-                "站在客户立场想问题"
+                "站在客户立场想问题",
+                "把复杂的决策拆成一步一步看清楚"
             ],
             "persona_golden_sentences": [
                 "我不帮你做决定，我帮你看清选项。",
@@ -109,6 +126,10 @@ class VideoEngine:
 
         label = {"Market": "市场宏观", "Property": "房子板块", "Story": "人物故事"}
 
+        # Strategy distribution stats
+        records_all = self.history.get("records", [])
+        strat_counts = Counter(r.get("strategy", "") for r in records_all[-20:] if r.get("strategy"))
+
         return {
             "date": target_date.strftime("%Y-%m-%d"),
             "pillar": pillar,
@@ -118,6 +139,9 @@ class VideoEngine:
             "recent_performance": self._recent_performance(7),
             "core_lanes": self.persona.get("core_lanes", []),
             "secondary_lanes": self.persona.get("secondary_lanes", []),
+            "direction_weights": self.persona.get("ip_positioning", {}).get("direction_weights", {}),
+            "direction_to_lane": self.persona.get("ip_positioning", {}).get("direction_to_lane", {}),
+            "strategy_distribution": dict(strat_counts),
         }
 
     def _select_pillar(self, pillar_dist):
@@ -128,24 +152,46 @@ class VideoEngine:
         return max(gaps, key=gaps.get)
 
     def _select_strategy(self, last_strategies):
-        core = self.persona.get("core_lanes", ["专业筛选", "避坑指南"])
-        secondary = self.persona.get("secondary_lanes", ["反差拒绝"])
-        all_valid = core + secondary
+        weights = self.persona.get("ip_positioning", {}).get("direction_weights", {})
+        lane_map = self.persona.get("ip_positioning", {}).get("direction_to_lane", {})
 
         records = self.history.get("records", [])
-        sc = Counter(r.get("strategy", "") for r in records if r.get("strategy"))
         last_used = last_strategies[0] if last_strategies else None
+
+        # Use IP direction weights if configured
+        if weights and lane_map:
+            recent = records[-10:]
+            recent_sc = Counter(r.get("strategy", "") for r in recent if r.get("strategy"))
+            recent_total = sum(recent_sc.values()) or 1
+            total_weight = sum(weights.values())
+
+            # Score each lane by how underrepresented it is vs target weight
+            lane_scores = {}
+            for direction, weight in weights.items():
+                lane = lane_map.get(direction)
+                if not lane:
+                    continue
+                actual_pct = recent_sc.get(lane, 0) / recent_total
+                target_pct = weight / total_weight
+                gap = target_pct - actual_pct
+                # Penalize repeating the last strategy
+                if lane == last_used:
+                    gap -= 0.15
+                lane_scores[lane] = gap
+
+            if lane_scores:
+                return max(lane_scores, key=lane_scores.get)
+
+        # Fallback: simple rotation on core lanes
+        core = self.persona.get("core_lanes", ["陪伴决策", "专业分析", "避坑指南"])
+        secondary = self.persona.get("secondary_lanes", ["资源推荐"])
+        all_valid = core + secondary
+        sc = Counter(r.get("strategy", "") for r in records if r.get("strategy"))
 
         if last_used in core:
             other = [s for s in core if s != last_used]
             if other:
                 return other[0]
-
-        total = sum(sc.get(s, 0) for s in all_valid)
-        sec_total = sum(sc.get(s, 0) for s in secondary)
-        if total > 0 and sec_total / max(total, 1) < 0.15:
-            for s in secondary:
-                return s
 
         return min(core, key=lambda s: sc.get(s, 0))
 
@@ -348,6 +394,21 @@ def main():
 
         dist = engine.history.get("pillar_distribution", {})
         print(f"\n[表现] 支柱分布: Market={dist.get('Market',0)} Property={dist.get('Property',0)} Story={dist.get('Story',0)}")
+
+        # IP方向权重分布
+        dw = s.get("direction_weights", {})
+        dl = s.get("direction_to_lane", {})
+        sd = s.get("strategy_distribution", {})
+        if dw and dl:
+            print(f"\n[IP方向] 目标权重 vs 近20条实际:")
+            total_w = sum(dw.values()) or 1
+            total_s = sum(sd.values()) or 1
+            for direction, weight in dw.items():
+                lane = dl.get(direction, direction)
+                actual = sd.get(lane, 0) / total_s * 100 if total_s > 0 else 0
+                target = weight / total_w * 100
+                bar = "#" * int(actual / 5) + "-" * (20 - int(actual / 5))
+                print(f"  {direction:6s}({lane:6s}) 目标{target:.0f}% 实际{actual:.0f}% [{bar}]")
         print()
 
     elif cmd == "history":

@@ -1,8 +1,18 @@
 ---
 name: property-video-script
-description: 每日从跟进信息中提取素材，生成房产短视频脚本，支持小红书/视频号双平台发布
+description: [已归档] 原 OpenClaw 技能定义，仅供参考。当前系统请参阅 CLAUDE.md v4.0
 homepage: https://github.com/tuantuan-assistant/daily-video-script
 metadata: {"openclaw":{"emoji":"🎬"}}
+---
+
+> **⚠ 此文件已归档 — 2026-05-16**
+>
+> 这是原 OpenClaw 架构的技能定义，引用了大量已不存在的文件（persona_profile.json、content_history.json、generate_script.py、RUN_DAILY_VIDEO_SCRIPT.cmd 等）。
+>
+> 当前系统已重构为 **Claude Code 驱动的个人IP短视频生产系统 v4.0**，所有操作说明请参阅 **[CLAUDE.md](CLAUDE.md)**。
+>
+> 以下内容仅为历史参考。
+
 ---
 
 # Property Video Script - 房产短视频脚本技能 🎬

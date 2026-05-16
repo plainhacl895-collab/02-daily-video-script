@@ -7,7 +7,7 @@
 - **Claude 负责**：创意决策 — 理解素材语义、定中心思想、写脚本、联网搜索、分析反馈、长期战略规划
 - **Python 负责**：数据计算 — 策略决策（3:4:3 支柱轮换）、记录存储、反馈分析、洞察生成
 
-**终极目标**：打造个人IP"杨静 = 上海改善置换专家"。主攻微信视频号 + 小红书。
+**终极目标**：打造个人IP"佳佳 = 上海改善置换专家"。主攻微信视频号 + 小红书。
 **北极星指标**：不是粉丝量，是**优质客户转化**——从视频到加微信到最终成交。
 
 ## 长期战略：三阶段路线图
@@ -30,13 +30,13 @@
 ```
 daily-video-script/
 ├── CLAUDE.md                    # 本文件 — Claude 操作手册
-├── SKILL.md                     # 保留作参考（原 OpenClaw 技能定义）
+├── SKILL.md                     # [已归档] 原 OpenClaw 技能定义，仅供参考
 ├── engine.py                    # ★ 策略引擎：status / record / analyze
 ├── viral_validator.py           # 9 维爆款验证器（27 分制）
 ├── pleasure_scorer.py           # 爽点评分器（12 分制）
 ├── douyin_extractor.py          # 抖音视频文案提取（基础+ASR）
 ├── config/
-│   └── persona.json             # 人设配置（违禁词/偏好句式/金句库/价值观）
+│   └── persona.json             # 人设配置（违禁词/偏好句式/金句库/价值观/IP定位）
 ├── data/
 │   ├── history.json             # 每条脚本的生成记录 + 发布数据
 │   └── insights.json            # 引擎自动生成的规律发现
@@ -47,8 +47,9 @@ daily-video-script/
 │   ├── layer2-strategy/         # 我怎么打：内容模式、复盘、竞品
 │   ├── layer3-execution/        # 我做了什么：文案技巧、钩子库、金句记录
 │   └── layer4-feedback/         # 外界反应：客户咨询来源
-├── generate_script.py           # [已废弃]
-└── persona_manager.py           # [已废弃]
+└── .claude/                     # Claude Code 技能配置
+    └── skills/
+        └── douyin-extract.md    # 抖音视频文案提取技能
 ```
 
 ## 人设铁律（每次生成必遵）
@@ -73,7 +74,7 @@ daily-video-script/
 
 ### 0. 战略对齐（每次生成前必做）
 在开始写脚本之前，先读 `memory/layer1-identity/positioning.md` 确认当前定位。
-问自己：今天这条视频发布后，观众会记住"杨静 = 什么"？
+问自己：今天这条视频发布后，观众会记住"佳佳 = 什么"？
 如果这条视频换个其他中介来念也没区别 → 说明定位没体现 → 换个角度。
 
 ### 1. 获取方向
@@ -122,9 +123,9 @@ python engine.py status
 **写法参考**：生成前读 `memory/layer3-execution/copywriting-techniques.md` 中的自查清单。
 
 ### 5. 跑验证器
-```python
-from viral_validator import ViralScriptValidator
-# 手动调用验证，检查 9 维得分
+```bash
+python viral_validator.py <脚本文件路径>     # 9维爆款验证（27分制）
+python pleasure_scorer.py <脚本文件路径>     # 爽点评分（12分制）
 ```
 
 ### 6. 人设自查
@@ -132,7 +133,7 @@ from viral_validator import ViralScriptValidator
 
 ### 7. 记录 + 输出
 跑 `python engine.py record` 或直接更新 `data/history.json`。
-脚本保存到桌面：`C:\Users\杨静\Desktop\daily-script-YYYY-MM-DD.md`
+脚本保存到桌面：`C:\Users\佳佳\Desktop\daily-script-YYYY-MM-DD.md`
 
 ### 8. 更新记忆（每次生成后）
 - 如果今天用了新钩子且效果好，追加到 `memory/layer3-execution/hook-library.md`

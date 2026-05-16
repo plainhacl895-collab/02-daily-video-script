@@ -4,6 +4,7 @@
 爆款脚本验证器 - 基于 8 大爆款特点
 """
 
+import json
 import re
 
 
@@ -273,10 +274,23 @@ class ViralScriptValidator:
 
 
 if __name__ == "__main__":
-    # 测试
+    import sys
+    from pathlib import Path
+
     validator = ViralScriptValidator()
-    
-    test_script = """# 1500.0买房，太太和老公意见不统一怎么办？
+
+    if len(sys.argv) > 1:
+        # CLI mode: python viral_validator.py <script_file>
+        script = Path(sys.argv[1]).read_text(encoding="utf-8")
+        persona_path = Path("config/persona.json")
+        persona = json.loads(persona_path.read_text(encoding="utf-8")) if persona_path.exists() else {}
+        result = validator.validate(script, persona)
+        validator.print_report(result)
+    else:
+        # Test mode
+        validator = ViralScriptValidator()
+
+        test_script = """# 1500.0买房，太太和老公意见不统一怎么办？
 
 ## 开场（3秒钩子）
 今天遇到一对夫妻，为了一套房子吵得不可开交。为什么？
@@ -299,6 +313,6 @@ if __name__ == "__main__":
 
 ## 结尾（7秒）
 如果你也在长宁买房遇到家庭分歧，私信我，帮你分析。关注走起来"""
-    
-    result = validator.validate(test_script)
-    validator.print_report(result)
+
+        result = validator.validate(test_script)
+        validator.print_report(result)
