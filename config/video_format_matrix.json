@@ -1,0 +1,127 @@
+{
+  "formats": {
+    "talking_head": {
+      "label": "口播",
+      "scene": "居家书房/阳台，自然光侧光，背景简洁（植物/书架），面对镜头",
+      "shot": "中近景半身，正视镜头，手机三脚架眼平高度距人物80cm",
+      "bgm": "极简钢琴/轻爵士/lo-fi，无歌词，音量30%",
+      "equipment": "手机 + 三脚架 + 领夹麦",
+      "solo_difficulty": "低",
+      "shoot_minutes": 20,
+      "edit_minutes": 15,
+      "batch_potential": "可连续录制3-4条，换装制造不同天感觉",
+      "best_platform": "视频号",
+      "script_word_count": "280-400字（比实拍更紧凑）"
+    },
+    "property_walk": {
+      "label": "实拍/探盘",
+      "scene": "房源内部，自然光+开灯，提前20分钟到场开窗帘/检查噪音",
+      "shot": "自拍模式（对镜头讲）+ POV模式（展示空间），稳定器防抖，细节特写",
+      "bgm": "讲话时不放BGM，段落间可加极低音量钢琴过渡",
+      "equipment": "手机 + 稳定器 + 无线领夹麦",
+      "solo_difficulty": "中",
+      "shoot_minutes": 40,
+      "edit_minutes": 30,
+      "batch_potential": "一次外出可拍2-3套，先拍B-roll再回家录VO",
+      "best_platform": "双平台同等适用",
+      "script_word_count": "250-400字（画面本身已传递信息）"
+    },
+    "mixed_montage": {
+      "label": "混剪",
+      "scene": "不出镜，安静房间录VO即可，画面用素材拼接",
+      "shot": "数据截图/地图截图/房源照片/文字卡片轮播，每张素材3-5秒",
+      "bgm": "轻快节奏/现代纯音乐，音量25%，作为底衬不抢VO",
+      "equipment": "手机或电脑 + 安静房间录VO",
+      "solo_difficulty": "低",
+      "shoot_minutes": 15,
+      "edit_minutes": 25,
+      "batch_potential": "可一次录5-8条VO再批量剪辑",
+      "best_platform": "小红书",
+      "script_word_count": "200-350字（画面卡片承载信息量大）"
+    }
+  },
+
+  "primary_map": {
+    "陪伴决策": {
+      "Market": "talking_head",
+      "Property": "property_walk",
+      "Story": "talking_head"
+    },
+    "专业分析": {
+      "Market": "mixed_montage",
+      "Property": "property_walk",
+      "Story": "talking_head"
+    },
+    "避坑指南": {
+      "Market": "mixed_montage",
+      "Property": "property_walk",
+      "Story": "talking_head"
+    },
+    "资源推荐": {
+      "Market": "mixed_montage",
+      "Property": "property_walk",
+      "Story": "mixed_montage"
+    }
+  },
+
+  "format_rationale": {
+    "陪伴决策_Market": "口播 → 面对面讲市场，像朋友聊天帮你理解",
+    "陪伴决策_Property": "实拍 → 我陪你看这套房，一起感受",
+    "陪伴决策_Story": "口播 → 讲故事需要脸，观众需要看到你的表情",
+    "专业分析_Market": "混剪 → 数据图表/对比表/地图叠加，可视化专业度",
+    "专业分析_Property": "实拍 → 现场分析，让你看到我在看什么",
+    "专业分析_Story": "口播 → 案例复盘，面对面分享经验",
+    "避坑指南_Market": "混剪 → 警示信号/数据叠加，信息密度重要",
+    "避坑指南_Property": "实拍 → 实地指出问题，画面比说更有说服力",
+    "避坑指南_Story": "口播 → 讲客户差点踩坑的经历，故事模式",
+    "资源推荐_Market": "混剪 → 清单/排名/精选，目录式呈现",
+    "资源推荐_Property": "实拍 → 这套房子本身就是资源，必须展示",
+    "资源推荐_Story": "混剪 → 前后对比/案例合集，批量呈现"
+  },
+
+  "override_rules": [
+    {
+      "condition": "has_onsite_material",
+      "description": "今天有可拍摄的房源（自拍或客户看房时顺便拍）",
+      "action": "force_property_walk"
+    },
+    {
+      "condition": "consecutive_same_format_3",
+      "description": "连续3条使用同一画面形式",
+      "action": "switch_to_next_format_in_rotation"
+    },
+    {
+      "condition": "no_venue_or_bad_weather",
+      "description": "无法进入房源或天气恶劣",
+      "action": "property_walk_fallback_to_talking_head"
+    },
+    {
+      "condition": "data_only_no_onsite",
+      "description": "素材仅有数据/观点，无现场画面",
+      "action": "prefer_talking_head_or_montage"
+    }
+  ],
+
+  "bgm_library": {
+    "陪伴型": {
+      "style": "温暖钢琴/轻吉他/舒缓弦乐",
+      "volume": "30%，不抢话",
+      "keywords": ["calm piano storytelling", "warm acoustic", "gentle guitar background"]
+    },
+    "行家型": {
+      "style": "极简电子/无BGM或极低音量",
+      "volume": "20%或不用",
+      "keywords": ["minimal ambient", "clean electronic", "no music"]
+    },
+    "避坑型": {
+      "style": "轻微紧张感/悬疑钢琴/不用BGM",
+      "volume": "25%",
+      "keywords": ["subtle tension", "documentary background", " muted suspense"]
+    },
+    "资源型": {
+      "style": "轻快节奏/现代纯音乐",
+      "volume": "30%",
+      "keywords": ["upbeat instrumental", "modern corporate", "efficiency vibe"]
+    }
+  }
+}

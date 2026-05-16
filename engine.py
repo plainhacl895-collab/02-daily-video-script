@@ -24,6 +24,7 @@ class VideoEngine:
 
         self.persona = self._load_persona()
         self.history = self._load_history()
+        self.format_matrix = self._load_format_matrix()
 
     # ═══ 加载 ═══
 
@@ -109,9 +110,60 @@ class VideoEngine:
         path = self.data_dir / "history.json"
         path.write_text(json.dumps(self.history, ensure_ascii=False, indent=2), encoding="utf-8")
 
+    def _load_format_matrix(self):
+        path = self.config_dir / "video_format_matrix.json"
+        if path.exists():
+            return json.loads(path.read_text(encoding="utf-8"))
+        return {}
+
     # ═══ 策略决策 ═══
 
-    def get_today_strategy(self, target_date=None):
+    def _select_video_format(self, strategy, pillar, no_venue=False):
+        primary_map = self.format_matrix.get("primary_map", {})
+        reason_map = self.format_matrix.get("format_rationale", {})
+        format_specs = self.format_matrix.get("formats", {})
+
+        # Layer 1: matrix lookup
+        strategy_formats = primary_map.get(strategy, {})
+        fmt_key = strategy_formats.get(pillar, "talking_head")
+
+        # Layer 2: override — check recent format rotation
+        records = self.history.get("records", [])
+        recent_formats = [r.get("video_format", "") for r in records[-5:] if r.get("video_format")]
+        if len(recent_formats) >= 3 and len(set(recent_formats[-3:])) == 1:
+            same = recent_formats[-1]
+            if same == "talking_head":
+                fmt_key = "mixed_montage"
+            elif same == "mixed_montage":
+                fmt_key = "property_walk" if strategy in ("陪伴决策", "专业分析") else "talking_head"
+            elif same == "property_walk":
+                fmt_key = "talking_head"
+
+        # Layer 3: no_venue fallback — 无法进入房源或天气恶劣时降级为口播
+        if fmt_key == "property_walk" and no_venue:
+            fmt_key = "talking_head"
+
+        spec = format_specs.get(fmt_key, format_specs.get("talking_head", {}))
+        rationale_key = f"{strategy}_{pillar}"
+        rationale = reason_map.get(rationale_key, "")
+
+        return {
+            "format_key": fmt_key,
+            "label": spec.get("label", "口播"),
+            "rationale": rationale,
+            "scene": spec.get("scene", ""),
+            "shot": spec.get("shot", ""),
+            "bgm": spec.get("bgm", ""),
+            "equipment": spec.get("equipment", ""),
+            "shoot_minutes": spec.get("shoot_minutes", 20),
+            "edit_minutes": spec.get("edit_minutes", 15),
+            "batch_potential": spec.get("batch_potential", ""),
+            "best_platform": spec.get("best_platform", ""),
+            "script_word_count": spec.get("script_word_count", "300-500字"),
+            "recent_formats": recent_formats,
+        }
+
+    def get_today_strategy(self, target_date=None, no_venue=False):
         if target_date is None:
             target_date = date.today()
 
@@ -122,6 +174,7 @@ class VideoEngine:
 
         pillar = self._select_pillar(pillar_dist)
         strategy = self._select_strategy(last_strategies)
+        video_format = self._select_video_format(strategy, pillar, no_venue=no_venue)
         recent_angles = last_angles[:3] if last_angles else []
 
         label = {"Market": "市场宏观", "Property": "房子板块", "Story": "人物故事"}
@@ -135,6 +188,7 @@ class VideoEngine:
             "pillar": pillar,
             "pillar_label": label.get(pillar, pillar),
             "strategy": strategy,
+            "video_format": video_format,
             "recent_angles": recent_angles,
             "recent_performance": self._recent_performance(7),
             "core_lanes": self.persona.get("core_lanes", []),
@@ -228,6 +282,11 @@ class VideoEngine:
             "date": today,
             "strategy": meta.get("strategy", ""),
             "pillar": meta.get("pillar", ""),
+            "video_format": meta.get("video_format", ""),
+            "bgm_type": meta.get("bgm_type", ""),
+            "scene": meta.get("scene", ""),
+            "tags": meta.get("tags", []),
+            "cover_concept": meta.get("cover_concept", ""),
             "shining_type": meta.get("shining_type", ""),
             "hook_type": meta.get("hook_type", ""),
             "topic": meta.get("topic", ""),
@@ -339,7 +398,29 @@ class VideoEngine:
                 "change_pct": round(change, 1),
             })
 
-        # 4. 最佳时长区间
+        # 4. 最佳格式（按完播率+互动率综合）
+        by_format = defaultdict(list)
+        for r in published:
+            f = r.get("video_format", "")
+            if not f:
+                continue
+            e = r["performance"].get("engagement_rate") or 0
+            c = r["performance"].get("completion_rate") or 0
+            by_format[f].append((e, c))
+
+        if by_format:
+            best_f = max(by_format, key=lambda f: sum(x[0] + x[1] for x in by_format[f]) / len(by_format[f]))
+            avg_fe = sum(x[0] for x in by_format[best_f]) / len(by_format[best_f])
+            avg_fc = sum(x[1] for x in by_format[best_f]) / len(by_format[best_f])
+            insights["findings"].append({
+                "type": "best_format",
+                "value": best_f,
+                "avg_engagement": round(avg_fe, 4),
+                "avg_completion": round(avg_fc, 4),
+                "count": len(by_format[best_f]),
+            })
+
+        # 5. 最佳时长区间
         by_dur = defaultdict(list)
         for r in published:
             d = r.get("duration_sec", 0) or 60
@@ -368,20 +449,41 @@ def main():
 
     if len(sys.argv) < 2:
         print("用法:")
-        print("  python engine.py status          查看今日策略和近期状态")
-        print("  python engine.py history [n]     查看最近 n 条记录")
-        print("  python engine.py analyze         生成表现洞察")
+        print("  python engine.py status [--no-venue]  查看今日策略和近期状态")
+        print("  python engine.py history [n]          查看最近 n 条记录")
+        print("  python engine.py analyze              生成表现洞察")
         return
 
     cmd = sys.argv[1]
+    args = sys.argv[2:]
 
     if cmd == "status":
-        s = engine.get_today_strategy()
+        no_venue = "--no-venue" in args
+        s = engine.get_today_strategy(no_venue=no_venue)
         print(f"\n[日期] {s['date']}")
         print(f"[策略] 今日策略: {s['strategy']}")
         print(f"[表现] 内容支柱: {s['pillar']} ({s['pillar_label']})")
         if s["recent_angles"]:
             print(f"[角度] 近3条角度: {' / '.join(s['recent_angles'][:3])}")
+
+        # 画面形式推荐
+        vf = s.get("video_format", {})
+        if vf:
+            print(f"\n[格式] 推荐画面形式: {vf.get('label', '?')}")
+            if no_venue:
+                print(f"   [!] 降级模式：no_venue=True，实拍已降级为口播")
+            print(f"   理由: {vf.get('rationale', '')}")
+            print(f"   场景: {vf.get('scene', '')}")
+            print(f"   机位: {vf.get('shot', '')}")
+            print(f"   BGM:  {vf.get('bgm', '')}")
+            print(f"   设备: {vf.get('equipment', '')}")
+            print(f"   耗时: 拍摄{vf.get('shoot_minutes', '?')}分钟 + 剪辑{vf.get('edit_minutes', '?')}分钟")
+            print(f"   字数: {vf.get('script_word_count', '')}")
+            print(f"   平台: {vf.get('best_platform', '')}")
+            print(f"   批量: {vf.get('batch_potential', '')}")
+            rf = vf.get("recent_formats", [])
+            if rf:
+                print(f"   近期: {' → '.join(rf[-5:])}")
 
         perf = s["recent_performance"]
         if perf.get("has_data"):
@@ -431,6 +533,9 @@ def main():
                 print(f"[表现] 最佳支柱: {f['value']} (互动率{f['avg_engagement']*100:.2f}% n={f['count']})")
             elif f["type"] == "trend":
                 print(f"[趋势] 互动率趋势: {f['direction']} ({f['change_pct']:+.1f}%)")
+            elif f["type"] == "best_format":
+                label_map = {"talking_head": "口播", "property_walk": "实拍/探盘", "mixed_montage": "混剪"}
+                print(f"[格式] 最佳形式: {label_map.get(f['value'], f['value'])} (互动率{f['avg_engagement']*100:.2f}% 完播率{f['avg_completion']*100:.1f}% n={f['count']})")
             elif f["type"] == "best_duration":
                 print(f"[时长] 最佳时长: {f['value']} (完播率{f['avg_completion']*100:.1f}% n={f['count']})")
         print()

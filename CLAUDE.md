@@ -28,28 +28,30 @@
 ## 文件结构
 
 ```
-daily-video-script/
-├── CLAUDE.md                    # 本文件 — Claude 操作手册
-├── SKILL.md                     # [已归档] 原 OpenClaw 技能定义，仅供参考
-├── engine.py                    # ★ 策略引擎：status / record / analyze
-├── viral_validator.py           # 9 维爆款验证器（27 分制）
-├── pleasure_scorer.py           # 爽点评分器（12 分制）
-├── douyin_extractor.py          # 抖音视频文案提取（基础+ASR）
+短视频/
+├── CLAUDE.md                         # 本文件 — Claude 操作手册
+├── SKILL.md                          # [已归档] 原 OpenClaw 技能定义，仅供参考
+├── engine.py                         # ★ 策略引擎：status / record / analyze
+├── viral_validator.py                # 9 维爆款验证器（27 分制）
+├── pleasure_scorer.py                # 爽点评分器（12 分制）
+├── douyin_extractor.py               # 抖音视频文案提取（基础+ASR）
 ├── config/
-│   └── persona.json             # 人设配置（违禁词/偏好句式/金句库/价值观/IP定位）
+│   ├── persona.json                  # 人设配置（违禁词/偏好句式/金句库/价值观/IP定位）
+│   └── video_format_matrix.json      # ★ 画面形式决策矩阵（4方向×3支柱→3格式）
 ├── data/
-│   ├── history.json             # 每条脚本的生成记录 + 发布数据
-│   └── insights.json            # 引擎自动生成的规律发现
+│   ├── history.json                  # 每条脚本的生成记录 + 发布数据
+│   └── insights.json                 # 引擎自动生成的规律发现
 ├── resources/
-│   └── inspiration_topics.json  # 话题弹药库（备用）
-├── memory/                      # ★ 长期记忆系统（四层）
-│   ├── layer1-identity/         # 我是谁：定位、核心观点
-│   ├── layer2-strategy/         # 我怎么打：内容模式、复盘、竞品
-│   ├── layer3-execution/        # 我做了什么：文案技巧、钩子库、金句记录
-│   └── layer4-feedback/         # 外界反应：客户咨询来源
-└── .claude/                     # Claude Code 技能配置
+│   └── inspiration_topics.json       # 话题弹药库（备用）
+├── memory/                           # ★ 长期记忆系统（四层）
+│   ├── layer1-identity/              # 我是谁：定位、核心观点
+│   ├── layer2-strategy/              # 我怎么打：内容模式、复盘、竞品
+│   ├── layer3-execution/             # 我做了什么：文案技巧、钩子库、金句记录、拍摄指南
+│   │   └── solo-shooting-guide.md    # ★ 单人拍摄实操指南（三级设备方案）
+│   └── layer4-feedback/              # 外界反应：客户咨询来源
+└── .claude/                          # Claude Code 技能配置
     └── skills/
-        └── douyin-extract.md    # 抖音视频文案提取技能
+        └── douyin-extract.md         # 抖音视频文案提取技能
 ```
 
 ## 人设铁律（每次生成必遵）
@@ -86,7 +88,8 @@ daily-video-script/
 ```bash
 python engine.py status
 ```
-输出今日策略、支柱、近期表现、支柱分布。用来指导脚本方向。
+输出今日策略、支柱、**画面形式推荐**（[格式] 面板）、近期表现、支柱分布、IP方向权重。
+重点关注：策略决定了"说什么"，格式决定了"怎么拍"——两者配合才有好视频。
 
 ### 3. 分析素材 + 定中心思想（核心步骤）
 
@@ -99,26 +102,76 @@ python engine.py status
 
 **中心思想质量检查**：这个论点能否在 `memory/layer1-identity/core-thesis.md` 中占一个位置？如果太浅、太泛、太像废话 → 重想。
 
+### 3.5 确定画面形式（新增步骤）
+
+Step 2 的 `[格式]` 面板已给出引擎推荐，但你需要根据实际情况确认或调整：
+
+**口播 (talking_head)** — 需要确认：
+- [ ] 今天能在一个安静、光线好的房间拍摄吗？
+- [ ] 有没有提词器方案（手机分屏/iPad/打印纸贴在镜头下方）？
+- [ ] 服装是否纯色、避免细条纹/密集格子？
+
+**实拍/探盘 (property_walk)** — 需要确认：
+- [ ] 今天是否有可进入的房源？（自拍或客户看房顺便拍）
+- [ ] 房东/业主是否同意拍摄？
+- [ ] 稳定器带了没有？
+- 如果无法进入房源 → 用 `python engine.py status` 的结果，告知引擎 `no_venue=True`，降级为口播
+
+**混剪 (mixed_montage)** — 需要确认：
+- [ ] 有没有足够的素材图片？（数据截图/地图/房源照片 ≥ 5张）
+- [ ] 安静房间录 VO 的环境准备好了吗？
+
+**格式决策规则**（参考 `config/video_format_matrix.json` override_rules）：
+1. 有房源可拍 → 强制实拍（Property 支柱天然适合现场）
+2. 连续 3 条同一形式 → 强制切下一个
+3. 天气/场地不可用 → 实拍降级口播
+4. 仅有数据/观点素材 → 口播或混剪
+
+确认后把最终选择的格式传给脚本生成流程。
+
 ### 4. 写脚本
+
+脚本文件要求包含 **YAML frontmatter** + **脚本正文**。
 
 结构要求：
 ```
+---
+date: YYYY-MM-DD
+format: talking_head | property_walk | mixed_montage
+pillar: Market | Property | Story
+strategy: 陪伴决策 | 专业分析 | 避坑指南 | 资源推荐
+bgm: <BGM风格描述>
+scene: <拍摄场景>
+shot: <机位描述>
+word_count_target: <字数范围>
+best_platform: <推荐发布平台>
+---
+
 # 标题（吸引眼球但不标题党）
 
 ## 开场（3秒钩子）
 分享式发现，不是命令式警告
+[画面:xxx]
 
 ## 反差 / 痛点 / 分析（根据策略调整）
 每段只论证中心思想的一个侧面
+[画面:xxx] [字幕叠加:xxx]
 
 ## 金句
 从金句库选，或即兴写一条人设一致的
+[画面:xxx] [语速:慢]
 
 ## 结尾（软引导）
 买不买无所谓 / 了解真实情况 / 评论区聊聊
+[画面:xxx] [字幕叠加:xxx]
 ```
 
-字数：300-500 字（约 60-90 秒口播）
+**每段脚本必须标注**：
+- `[画面:xxx]` — 这段口播时画面该展示什么
+- `[字幕叠加:xxx]` — 关键词/数字/金句的屏幕文字叠加
+- `[语速:快/正常/慢]` — 节奏变化点
+
+字数：按 `video_format_matrix.json` 中各格式的 `script_word_count` 建议，口播 280-400 字，实拍 250-400 字（画面已传信息），混剪 200-350 字（卡片承载信息）。
 
 **写法参考**：生成前读 `memory/layer3-execution/copywriting-techniques.md` 中的自查清单。
 
@@ -139,6 +192,35 @@ python pleasure_scorer.py <脚本文件路径>     # 爽点评分（12分制）
 - 如果今天用了新钩子且效果好，追加到 `memory/layer3-execution/hook-library.md`
 - 如果用了金句，更新 `memory/layer3-execution/golden-sentence-log.md` 的使用次数
 - 如果产生了一个新的核心观点，添加到 `memory/layer1-identity/core-thesis.md`
+
+### 8.5 输出拍摄清单（新增步骤）
+
+脚本生成完毕后，输出一份可直接使用的拍摄清单，参考 `memory/layer3-execution/solo-shooting-guide.md`：
+
+```
+## 今日拍摄清单
+
+**画面形式**：口播 / 实拍 / 混剪
+**场景**：<具体拍摄地点>
+**服装**：<推荐颜色/款式>
+**设备**：<需携带的设备列表>
+**BGM**：<风格 + 关键词，方便在剪映搜索>
+**提词器**：<手机分屏 / iPad / 打印纸>
+**时长预估**：拍摄 __ 分钟 + 剪辑 __ 分钟
+
+**分段画面指导**：
+| 段落 | 时间 | 画面 | 字幕叠加 | 语速 |
+|------|------|------|----------|------|
+| 开场 | 0-3s | ... | ... | 正常 |
+| 分析 | 3-20s | ... | 关键数字 | 稍慢 |
+| 金句 | 20-25s | ... | 全屏金句 | 慢 |
+| 结尾 | 25-30s | ... | ... | 正常 |
+
+**封面建议**：<一句话描述封面画面 + 文字叠层>
+**双平台标签**：
+- 视频号：#xxx #xxx
+- 小红书：#xxx #xxx
+```
 
 ## 反馈录入
 
