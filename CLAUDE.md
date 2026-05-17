@@ -324,3 +324,14 @@ python pleasure_scorer.py <脚本文件路径>     # 爽点评分（12分制）
 - 敏感词替换：投资→资产配置，升值→保值，抄底→入手时机
 - 绝对化用语软化：千万别买→建议谨慎考虑
 - 引流话术替换：私信我→评论区交流，关注我→点赞收藏
+
+## 常用命令速查
+
+```bash
+python engine.py status                  # 今日策略/支柱/格式推荐
+python engine.py record <脚本路径>       # 记录脚本到 history.json
+python engine.py analyze                 # 分析已发布数据，生成 insights
+python viral_validator.py <脚本路径>     # 9 维爆款验证（27 分制）
+python pleasure_scorer.py <脚本路径>     # 爽点评分（12 分制）
+python douyin_extractor.py <链接> --asr  # 提取抖音视频口播文案
+```
