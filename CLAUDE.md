@@ -243,7 +243,7 @@ python pleasure_scorer.py <脚本文件路径>     # 爽点评分（12分制）
 
 ### 7. 记录 + 输出
 跑 `python engine.py record` 或直接更新 `data/history.json`。
-脚本保存到桌面：`C:\Users\佳佳\Desktop\daily-script-YYYY-MM-DD.md`
+脚本保存到当前用户桌面：`$env:USERPROFILE\Desktop\daily-script-YYYY-MM-DD.md`
 
 ### 8. 更新记忆（每次生成后）
 - 如果今天用了新钩子且效果好，追加到 `memory/layer3-execution/hook-library.md`
