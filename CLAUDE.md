@@ -30,7 +30,6 @@
 ```
 短视频/
 ├── CLAUDE.md                         # 本文件 — Claude 操作手册
-├── SKILL.md                          # [已归档] 原 OpenClaw 技能定义，仅供参考
 ├── engine.py                         # ★ 策略引擎：status / record / analyze
 ├── viral_validator.py                # 9 维爆款验证器（27 分制）
 ├── pleasure_scorer.py                # 爽点评分器（12 分制）
@@ -41,14 +40,13 @@
 ├── data/
 │   ├── history.json                  # 每条脚本的生成记录 + 发布数据
 │   └── insights.json                 # 引擎自动生成的规律发现
-├── resources/
-│   └── inspiration_topics.json       # 话题弹药库（备用）
 ├── memory/                           # ★ 长期记忆系统（四层）
 │   ├── layer1-identity/              # 我是谁：定位、核心观点
 │   ├── layer2-strategy/              # 我怎么打：内容模式、复盘、竞品
-│   ├── layer3-execution/             # 我做了什么：文案技巧、钩子库、金句记录、拍摄指南、素材捕捉、制作运营
+│   ├── layer3-execution/             # 我做了什么：文案技巧、钩子库、金句记录、拍摄指南、素材捕捉、制作运营、话题弹药库
 │   │   ├── solo-shooting-guide.md    # ★ 单人拍摄实操指南（三级设备方案）
 │   │   ├── material-source-guide.md  # ★ 素材来源指南（从日常工作中提取素材）
+│   │   ├── inspiration-topics.md     # 话题弹药库（素材枯竭时的备用选题）
 │   │   └── production-playbook.md    # ★ 制作运营手册（封面/标题/字幕/剪辑/发布）
 │   └── layer4-feedback/              # 外界反应：客户咨询来源
 └── .claude/                          # Claude Code 技能配置
@@ -92,6 +90,8 @@
 4. 最近有没有看到同行的内容让你觉得"我不太同意"？
 
 根据用户的回答，从中提取可用的素材，再进入下一步。
+
+如果以上引导都无法产出有效素材，读 `memory/layer3-execution/inspiration-topics.md`，从话题弹药库中选题，结合一条假设的客户场景作为引子进入下一步。
 
 如果用户给了一个抖音链接，用 `python douyin_extractor.py <链接> --asr` 提取完整口播文案学习参考。
 
