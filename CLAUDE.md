@@ -47,7 +47,8 @@
 │   │   ├── solo-shooting-guide.md    # ★ 单人拍摄实操指南（三级设备方案）
 │   │   ├── material-source-guide.md  # ★ 素材来源指南（从日常工作中提取素材）
 │   │   ├── inspiration-topics.md     # 话题弹药库（素材枯竭时的备用选题）
-│   │   └── production-playbook.md    # ★ 制作运营手册（封面/标题/字幕/剪辑/发布）
+│   │   ├── production-playbook.md    # ★ 制作运营手册（封面/标题/字幕/剪辑/发布）
+│   │   └── competitor-learning-log.md # ★ 竞品拆解学习日志（攒够再分析，不改技能文件）
 │   └── layer4-feedback/              # 外界反应：客户咨询来源
 └── .claude/                          # Claude Code 技能配置
     └── skills/
@@ -95,6 +96,8 @@
 如果以上引导都无法产出有效素材，读 `memory/layer3-execution/inspiration-topics.md`，从话题弹药库中选题，结合一条假设的客户场景作为引子进入下一步。
 
 如果用户给了一个抖音链接，默认用 `python douyin_extractor.py <链接> --asr --comments` 提取完整口播文案 + 热门评论。评论区是判断视频为什么火的最佳来源，提取后先分析评论再写拆解。
+
+**拆解后必须做的事**：将提取到的可复用技法**写入 `memory/layer3-execution/competitor-learning-log.md`**，不要直接修改任何技能文件（copywriting-techniques、hook-library、production-playbook 等）。技法积累到 10+ 条后，统一分析并决定如何纳入系统。
 
 ### 2. 跑引擎看状态
 ```bash
