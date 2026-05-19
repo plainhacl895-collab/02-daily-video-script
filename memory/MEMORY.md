@@ -12,3 +12,4 @@
 - [话题弹药库](layer3-execution/inspiration-topics.md) — 素材枯竭时的备用选题
 - [制作运营手册](layer3-execution/production-playbook.md) — 封面/标题/字幕/剪辑/发布全流程
 - [客户咨询来源](layer4-feedback/client-inquiry-log.md) — 通过哪条视频来的客户
+- [API密钥](layer3-execution/api-keys.md) — 项目用到的API密钥，避免重复询问

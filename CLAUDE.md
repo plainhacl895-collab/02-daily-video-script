@@ -94,7 +94,7 @@
 
 如果以上引导都无法产出有效素材，读 `memory/layer3-execution/inspiration-topics.md`，从话题弹药库中选题，结合一条假设的客户场景作为引子进入下一步。
 
-如果用户给了一个抖音链接，用 `python douyin_extractor.py <链接> --asr` 提取完整口播文案学习参考。
+如果用户给了一个抖音链接，默认用 `python douyin_extractor.py <链接> --asr --comments` 提取完整口播文案 + 热门评论。评论区是判断视频为什么火的最佳来源，提取后先分析评论再写拆解。
 
 ### 2. 跑引擎看状态
 ```bash
@@ -360,5 +360,5 @@ python engine.py record <脚本路径>       # 记录脚本到 history.json
 python engine.py analyze                 # 分析已发布数据，生成 insights
 python viral_validator.py <脚本路径>     # 9 维爆款验证（27 分制）
 python pleasure_scorer.py <脚本路径>     # 爽点评分（12 分制）
-python douyin_extractor.py <链接> --asr  # 提取抖音视频口播文案
+python douyin_extractor.py <链接> --asr --comments  # 提取抖音视频口播文案+评论
 ```

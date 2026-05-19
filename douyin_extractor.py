@@ -1,12 +1,14 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-抖音视频信息提取器 + ASR 语音转文字（进阶版）
-从分享链接提取视频描述、作者信息、数据指标 + 完整口播文案（AI 语音识别）
+抖音视频信息提取器 + ASR 语音转文字 + 评论抓取
+从分享链接提取视频描述、作者信息、数据指标、完整口播文案（AI 语音识别）、热门评论
 
 用法:
-  python douyin_extractor.py <抖音分享链接>              # 基础版：提取描述
-  python douyin_extractor.py <抖音分享链接> --asr        # 进阶版：提取完整口播文案
+  python douyin_extractor.py <抖音分享链接>                  # 基础版：提取描述
+  python douyin_extractor.py <抖音分享链接> --asr            # 进阶版：提取完整口播文案
+  python douyin_extractor.py <抖音分享链接> --comments [N]   # 提取热门评论（默认20条）
+  python douyin_extractor.py <抖音分享链接> --asr --comments # 组合使用
 """
 
 import re
@@ -87,6 +89,45 @@ def extract_video_info(share_url: str) -> dict:
         ],
     }
 
+
+def extract_comments(video_id: str, count: int = 20) -> list[dict]:
+    """提取视频热门评论"""
+    url = f"https://www.iesdouyin.com/web/api/v2/comment/list/?aweme_id={video_id}&count={count}&cursor=0"
+    r = requests.get(url, headers=HEADERS)
+    r.raise_for_status()
+    data = r.json()
+    comments = data.get("comments", [])
+    results = []
+    for c in comments:
+        replies = [
+            {"nickname": rp.get("user", {}).get("nickname", ""), "text": rp.get("text", "")}
+            for rp in c.get("reply_comment", [])[:5]
+        ]
+        results.append({
+            "nickname": c.get("user", {}).get("nickname", ""),
+            "text": c.get("text", ""),
+            "digg_count": c.get("digg_count", 0),
+            "reply_count": c.get("reply_comment_total", 0),
+            "replies": replies,
+        })
+    return results
+
+
+def print_comments(comments: list[dict]):
+    """打印评论"""
+    if not comments:
+        print("\n(暂无评论)")
+        return
+    print(f"\n{'=' * 60}")
+    print(f"【💬 热门评论】共 {len(comments)} 条")
+    print()
+    for i, c in enumerate(comments):
+        replies_info = f" {c['reply_count']}回复" if c['reply_count'] else ""
+        print(f"{i+1}. [{c['nickname']}] ({c['digg_count']}赞{replies_info})")
+        print(f"   {c['text']}")
+        for rp in c.get("replies", []):
+            print(f"   └─ [{rp['nickname']}]: {rp['text']}")
+        print()
 
 def extract_audio(video_path: Path, output_path: Path) -> Path:
     """从视频提取音频为 MP3"""
@@ -186,12 +227,22 @@ def print_info(info: dict):
 if __name__ == "__main__":
     if len(sys.argv) < 2:
         print("用法:")
-        print("  python douyin_extractor.py <抖音分享链接>              # 基础版")
-        print("  python douyin_extractor.py <抖音分享链接> --asr        # 进阶版（ASR语音转文字）")
+        print("  python douyin_extractor.py <抖音分享链接>                  # 基础版")
+        print("  python douyin_extractor.py <抖音分享链接> --asr            # 进阶版（ASR语音转文字）")
+        print("  python douyin_extractor.py <抖音分享链接> --comments [N]   # 提取热门评论")
+        print("  python douyin_extractor.py <抖音分享链接> --asr --comments # 组合使用")
         sys.exit(1)
 
     url = sys.argv[1]
     use_asr = "--asr" in sys.argv
+    use_comments = "--comments" in sys.argv
+
+    # 解析评论数量
+    comment_count = 20
+    if use_comments:
+        idx = sys.argv.index("--comments")
+        if idx + 1 < len(sys.argv) and sys.argv[idx + 1].isdigit():
+            comment_count = int(sys.argv[idx + 1])
 
     if use_asr:
         api_key = os.environ.get("SILICONFLOW_API_KEY", "")
@@ -204,3 +255,11 @@ if __name__ == "__main__":
         info = extract_video_info(url)
 
     print_info(info)
+
+    if use_comments:
+        print(">>> 抓取评论...")
+        try:
+            comments = extract_comments(info["video_id"], comment_count)
+            print_comments(comments)
+        except Exception as e:
+            print(f"评论抓取失败: {e}")
