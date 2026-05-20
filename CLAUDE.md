@@ -335,6 +335,8 @@ python pleasure_scorer.py <脚本文件路径>     # 爽点评分（12分制）
 
 **核心能力**：Whisper 转录口播素材 → 与脚本自动对齐 → FFmpeg 自动裁剪/调速/字幕/画面放大 → 输出成片。详见 `video_editor.py`。
 
+**设计参考**：字幕/字体/音效/BGM/布局等设计决策，查阅 `memory/layer3-execution/video-editing-knowledge/` 知识库。生成字幕时读 `subtitles.md`，选字体时读 `fonts.md`，加音效时读 `sound-effects.md`，选BGM时读 `bgm.md`。
+
 **v2.0 分步审核流程（推荐，来自 Bonnie 实操经验）**：
 1. `python video_editor.py <素材> --transcribe-only` — 先转录，用户校对错字
 2. `python video_editor.py <脚本> --plan-only` — 出剪辑计划，用户审核

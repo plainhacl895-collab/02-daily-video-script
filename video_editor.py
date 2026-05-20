@@ -55,10 +55,12 @@ def parse_script(script_path: str) -> list[dict]:
         visual_match = re.search(r'\[画面:\s*([^\]]+)\]', body)
         subtitle_match = re.search(r'\[字幕叠加:\s*([^\]]+)\]', body)
         speed_match = re.search(r'\[语速:\s*([^\]]+)\]', body)
+        chapter_match = re.search(r'\[章节标题:\s*([^\]]+)\]', body)
 
         text = re.sub(r'\[画面:[^\]]*\]', '', body)
         text = re.sub(r'\[字幕叠加:[^\]]*\]', '', text)
         text = re.sub(r'\[语速:[^\]]*\]', '', text)
+        text = re.sub(r'\[章节标题:[^\]]*\]', '', text)
         text = text.strip()
 
         if not text:
@@ -70,6 +72,7 @@ def parse_script(script_path: str) -> list[dict]:
             'visual': visual_match.group(1).strip() if visual_match else None,
             'subtitle_overlay': subtitle_match.group(1).strip() if subtitle_match else None,
             'speed': speed_match.group(1).strip() if speed_match else '正常',
+            'chapter_title': chapter_match.group(1).strip() if chapter_match else None,
             'emphasis': title == '金句' or (subtitle_match is not None),
         })
 
@@ -166,6 +169,111 @@ def _lcs_length(a: str, b: str) -> int:
     return prev[n]
 
 
+def words_to_subtitles(words: list[dict], time_ranges: list[tuple[float, float]],
+                       max_chars: int = 20,
+                       script_texts: Optional[list[str]] = None) -> list[dict]:
+    """将 Whisper 词级时间戳转为字幕事件，精确同步语音。
+
+    若提供 script_texts，则用脚本文本替换 Whisper 文本，保留 Whisper 时间轴。
+    返回: [{'text': str, 'start': float, 'end': float}, ...]
+    """
+    events = []
+    for t_start, t_end in time_ranges:
+        seg_words = [w for w in words
+                     if w['start'] >= t_start - 0.15 and w['end'] <= t_end + 0.15]
+        if not seg_words:
+            continue
+
+        line_words = []
+        line_start = seg_words[0]['start']
+        line_chars = 0
+
+        for w in seg_words:
+            line_chars += len(w['word'])
+            line_words.append(w)
+            word_text = w['word'].strip()
+
+            should_break = (word_text and word_text[-1] in '，。！？、') or line_chars >= max_chars
+            if should_break:
+                text = ''.join(lw['word'] for lw in line_words)
+                events.append({
+                    'text': text,
+                    'start': line_start,
+                    'end': w['end'],
+                })
+                line_words = []
+                line_start = w['end']
+                line_chars = 0
+
+        if line_words:
+            text = ''.join(lw['word'] for lw in line_words)
+            events.append({
+                'text': text,
+                'start': line_start,
+                'end': line_words[-1]['end'],
+            })
+
+    # 若提供了脚本文字，映射到时间槽上
+    if script_texts:
+        events = _apply_script_texts(events, script_texts)
+
+    # 最终换行处理
+    for evt in events:
+        evt['text'] = _wrap_long_line(evt['text'], 18)
+
+    return events
+
+
+def _apply_script_texts(timing_events: list[dict],
+                        script_texts: list[str]) -> list[dict]:
+    """将脚本文本按比例映射到 Whisper 时间槽，保留精确时间轴。"""
+    # 拼接所有脚本句
+    all_script = '\n'.join(script_texts)
+    script_sentences = []
+    parts = re.split(r'([，。！？])', all_script)
+    i = 0
+    while i < len(parts):
+        s = parts[i].strip()
+        p = parts[i + 1] if i + 1 < len(parts) else ''
+        i += 2
+        if s:
+            script_sentences.append(s + p)
+
+    n_events = len(timing_events)
+    n_sents = len(script_sentences)
+    if n_events == 0 or n_sents == 0:
+        return timing_events
+
+    result = []
+    for j in range(n_events):
+        start_idx = int(j / n_events * n_sents)
+        end_idx = int((j + 1) / n_events * n_sents)
+        if end_idx <= start_idx:
+            end_idx = start_idx + 1
+        if end_idx > n_sents:
+            end_idx = n_sents
+        merged = ''.join(script_sentences[start_idx:end_idx])
+        result.append({
+            'text': merged,
+            'start': timing_events[j]['start'],
+            'end': timing_events[j]['end'],
+        })
+    return result
+
+
+def _wrap_long_line(text: str, max_chars: int = 18) -> str:
+    """长字幕行自动插入 ASS 换行符 \\N。"""
+    if len(text) <= max_chars:
+        return text
+    # 在中点附近找标点断开
+    mid = len(text) // 2
+    for i in range(mid, max(mid - 6, 0), -1):
+        if text[i] in '，。！？、 ':
+            return text[:i + 1] + r'\N' + text[i + 1:]
+    # 无标点则在中点硬断
+    return text[:mid] + r'\N' + text[mid:]
+
+
 # ======================================================================
 # 3. 语速 & 字幕工具
 # ======================================================================
@@ -195,6 +303,7 @@ def subtitle_to_ass(text: str, start_sec: float, end_sec: float,
         'normal': r'{\fs55\bord2\shad1\c&HFFFFFF&\3c&H000000&}',
         'emphasis': r'{\fs80\bord3\shad1\c&H00FFFF&\3c&H000000&\an5}',
         'jinju': r'{\fs90\bord4\shad1\c&HFFFFFF&\3c&H000000&\an5}',
+        'chapter': r'{\fs64\bord3\shad2\c&H00FFD0&\3c&H000000&\an8}',
     }
     st = styles.get(style, styles['normal'])
     return (f'Dialogue: 0,{_fmt_ass_time(start_sec)},{_fmt_ass_time(end_sec)},'
@@ -222,6 +331,7 @@ Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour,
 Style: normal,{font_name},55,&H00FFFFFF,&H000000FF,&H00000000,&H00000000,0,0,0,0,100,100,0,0,1,2,1,2,100,100,60,1
 Style: emphasis,{font_name},80,&H0000FFFF,&H000000FF,&H00000000,&H00000000,1,0,0,0,100,100,0,0,1,3,1,5,100,100,60,1
 Style: jinju,{font_name},90,&H00FFFFFF,&H000000FF,&H00000000,&H00000000,1,0,0,0,110,110,0,0,1,4,1,5,100,100,60,1
+Style: chapter,{font_name},64,&H0000FFFF,&H000000FF,&H00000000,&H00000000,1,0,0,0,100,100,0,0,1,3,1,2,100,100,80,1
 
 [Events]
 Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
@@ -266,6 +376,7 @@ def generate_timeline(script_path: str, video_path: str) -> dict:
         'timeline': timeline,
         'total_duration': total,
         'source_duration': words[-1]['end'] if words else 0,
+        'words': words,
     }
 
 
@@ -307,7 +418,8 @@ def transcribe_only(video_path: str) -> list[dict]:
 def render_video(video_path: str, segments: list[dict],
                  timeline: list[tuple[float, float]],
                  output_path: str, bgm_path: Optional[str] = None,
-                 font_path: Optional[str] = None) -> str:
+                 font_path: Optional[str] = None,
+                 words: Optional[list[dict]] = None) -> str:
     """逐段裁剪 + concat → 字幕烧录 → BGM 闪避混音 → 输出成片。"""
     import shutil
 
@@ -322,7 +434,8 @@ def render_video(video_path: str, segments: list[dict],
         'ffprobe', '-v', 'quiet', '-select_streams', 'v:0',
         '-show_entries', 'stream=width,height', '-of', 'csv=p=0', video_path
     ]
-    result = subprocess.run(probe_cmd, capture_output=True, text=True)
+    result = subprocess.run(probe_cmd, capture_output=True, text=True,
+                            encoding='utf-8', errors='replace')
     try:
         w, h = result.stdout.strip().split(',')
         width, height = int(w), int(h)
@@ -331,8 +444,16 @@ def render_video(video_path: str, segments: list[dict],
 
     # 确定字体
     font_name = '思源黑体'
+    fonts_dir = None
     if font_path and os.path.exists(font_path):
-        font_name = os.path.splitext(os.path.basename(font_path))[0]
+        # 复制字体到 ASCII 安全路径，与字幕同目录
+        safe_font_dir = os.path.join('D:/', '_videosub')
+        os.makedirs(safe_font_dir, exist_ok=True)
+        safe_font_path = os.path.join(safe_font_dir, os.path.basename(font_path))
+        if not os.path.exists(safe_font_path):
+            shutil.copy2(font_path, safe_font_path)
+        # 用 libass @前缀引用同目录字体，避免 fontsdir 路径解析问题
+        font_name = '@' + os.path.splitext(os.path.basename(font_path))[0]
         font_name = font_name.replace(' ', '')
 
     # --- 逐段裁剪 ---
@@ -353,14 +474,18 @@ def render_video(video_path: str, segments: list[dict],
             )
 
         cmd = ['ffmpeg', '-y', '-ss', str(t_start), '-t', str(duration),
-               '-i', video_path, '-c:v', 'libx264', '-crf', '20',
-               '-preset', 'fast', '-pix_fmt', 'yuv420p',
-               '-c:a', 'aac', '-b:a', '128k']
+               '-i', video_path]
         if filters:
-            cmd.insert(-8, '-vf')
-            cmd.insert(-7, ','.join(filters))
+            cmd.extend(['-vf', ','.join(filters)])
+        cmd.extend(['-c:v', 'libx264', '-crf', '20',
+                    '-preset', 'fast', '-pix_fmt', 'yuv420p',
+                    '-c:a', 'aac', '-b:a', '128k'])
         cmd.append(clip_path)
-        subprocess.run(cmd, capture_output=True)
+        result = subprocess.run(cmd, capture_output=True)
+        if result.returncode != 0 or not os.path.exists(clip_path):
+            stderr_tail = (result.stderr or b'')[-300:].decode('utf-8', errors='replace')
+            print(f'  ⚠ 片段{i} [{seg["section"]}] 裁剪失败:\n{stderr_tail}')
+            continue
         clip_files.append(clip_path)
 
     if not clip_files:
@@ -373,13 +498,22 @@ def render_video(video_path: str, segments: list[dict],
             f.write(f"file '{cf}'\n")
 
     concat_video = os.path.join(tmpdir, 'concat.mp4')
-    subprocess.run([
+    result = subprocess.run([
         'ffmpeg', '-y', '-f', 'concat', '-safe', '0',
         '-i', concat_list, '-c', 'copy', concat_video,
     ], capture_output=True)
+    if result.returncode != 0 or not os.path.exists(concat_video):
+        stderr_tail = (result.stderr or b'')[-500:].decode('utf-8', errors='replace')
+        raise RuntimeError(f'concat 失败:\n{stderr_tail}')
 
     # --- 字幕 ---
-    sub_path = os.path.join(tmpdir, 'subtitle.ass')
+    # FFmpeg ASS 滤镜对含盘符/非ASCII/空格的路径敏感
+    # 用 D:\_videosub\ 避免所有问题
+    sub_dir = os.path.join('D:/', '_videosub')
+    os.makedirs(sub_dir, exist_ok=True)
+    sub_path = os.path.join(sub_dir, 'subtitle.ass')
+    # 转义冒号防止被 FFmpeg 滤镜解析器当作选项分隔符
+    sub_path_safe = sub_path.replace('\\', '/').replace(':', '\\:')
     with open(sub_path, 'w', encoding='utf-8') as f:
         f.write(build_ass_header(width, height, font_name))
         current_time = 0.0
@@ -387,37 +521,42 @@ def render_video(video_path: str, segments: list[dict],
             dur = t_end - t_start
             if dur <= 0:
                 continue
-            dur = dur / speed_factor(seg['speed'])
-            seg_end = current_time + dur
+            sf = speed_factor(seg['speed'])
+            seg_out_dur = dur / sf
 
-            # 断句字幕
-            sentences = re.split(r'[，。！？]', seg['text'])
-            sentence_time = current_time
-            for s in sentences:
-                s = s.strip()
-                if not s:
-                    continue
-                char_dur = max(len(s) * 0.25, 1.5)
-                s_end = min(sentence_time + char_dur, seg_end)
-                f.write(subtitle_to_ass(s, sentence_time, s_end, 'normal') + '\n')
-                sentence_time = s_end
+            # 章节标题 — 段首叠加，持续 3 秒
+            if seg.get('chapter_title'):
+                chapter_dur = min(3.0, seg_out_dur * 0.5)
+                f.write(subtitle_to_ass(seg['chapter_title'],
+                        current_time, current_time + chapter_dur, 'chapter') + '\n')
+
+            # ★ 断句字幕 — Whisper 精确时间轴 + 脚本文本
+            if words:
+                seg_events = words_to_subtitles(words, [(t_start, t_end)],
+                                                script_texts=[seg['text']])
+                for evt in seg_events:
+                    # 原始时间 → 输出时间轴映射
+                    out_start = current_time + (evt['start'] - t_start) / sf
+                    out_end = current_time + (evt['end'] - t_start) / sf
+                    f.write(subtitle_to_ass(evt['text'], out_start, out_end, 'normal') + '\n')
 
             # 强调字幕
             if seg.get('subtitle_overlay'):
                 overlay = seg['subtitle_overlay']
                 style = 'jinju' if seg['section'] == '金句' else 'emphasis'
-                overlay_start = current_time + dur * 0.15
-                overlay_end = overlay_start + min(2.5, dur * 0.7)
+                overlay_start = current_time + seg_out_dur * 0.15
+                overlay_end = overlay_start + min(2.5, seg_out_dur * 0.7)
                 f.write(subtitle_to_ass(overlay, overlay_start, overlay_end, style) + '\n')
 
-            current_time = seg_end
+            current_time += seg_out_dur
 
     # --- BGM (带闪避) ---
     if bgm_path and os.path.exists(bgm_path):
         # 获取 concat 总时长
         dur_cmd = ['ffprobe', '-v', 'quiet', '-show_entries',
                    'format=duration', '-of', 'csv=p=0', concat_video]
-        dur_result = subprocess.run(dur_cmd, capture_output=True, text=True)
+        dur_result = subprocess.run(dur_cmd, capture_output=True, text=True,
+                                    encoding='utf-8', errors='replace')
         total_dur = float(dur_result.stdout.strip())
 
         # 生成音频闪避控制文件：有人声段 BGM=20%，无声段 BGM=40%
@@ -440,6 +579,7 @@ def render_video(video_path: str, segments: list[dict],
                 current_t = seg_end_t
 
         # BGM: 裁剪到视频时长 + 闪避 + 淡入淡出
+        sub_path_fwd = sub_path_safe
         cmd = ['ffmpeg', '-y',
                '-i', concat_video,
                '-i', bgm_path,
@@ -448,21 +588,24 @@ def render_video(video_path: str, segments: list[dict],
                f'volume=0.35[bgm];'
                f'[0:a][bgm]amix=inputs=2:duration=first:weights=1 0.5[audio]',
                '-map', '0:v', '-map', '[audio]',
-               '-vf', f'ass={sub_path}',
+               '-vf', f"ass='{sub_path_fwd}'" + (f":fontsdir={fonts_dir}" if fonts_dir else ""),
                '-c:v', 'libx264', '-crf', '20', '-preset', 'fast', '-pix_fmt', 'yuv420p',
                '-c:a', 'aac', '-b:a', '128k',
                output_path]
     else:
+        sub_path_fwd = sub_path_safe
         cmd = ['ffmpeg', '-y', '-i', concat_video,
-               '-vf', f'ass={sub_path}',
+               '-vf', f"ass='{sub_path_fwd}'" + (f":fontsdir={fonts_dir}" if fonts_dir else ""),
                '-c:v', 'libx264', '-crf', '20', '-preset', 'fast', '-pix_fmt', 'yuv420p',
                '-c:a', 'copy',
                output_path]
 
     print('\n[渲染] 正在合成最终视频...')
-    result = subprocess.run(cmd, capture_output=True, text=True)
+    result = subprocess.run(cmd, capture_output=True, text=True,
+                            encoding='utf-8', errors='replace')
     if result.returncode != 0:
-        print(f'  ⚠ FFmpeg 错误:\n{result.stderr[-500:]}')
+        stderr_tail = (result.stderr or '')[-500:]
+        print(f'  ⚠ FFmpeg 错误:\n{stderr_tail}')
 
     # 清理
     import shutil as _shutil
@@ -592,7 +735,7 @@ def main():
         output_path = os.path.join(desktop, f'{script_name}-成片.mp4')
 
     render_video(video_path, result['segments'], result['timeline'],
-                 output_path, args.bgm, args.font)
+                 output_path, args.bgm, args.font, result.get('words'))
     print(f'\n✅ 成片已输出到: {output_path}')
 
 
