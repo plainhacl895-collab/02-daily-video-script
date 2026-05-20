@@ -335,6 +335,18 @@ python pleasure_scorer.py <脚本文件路径>     # 爽点评分（12分制）
 
 **核心能力**：Whisper 转录口播素材 → 与脚本自动对齐 → FFmpeg 自动裁剪/调速/字幕/画面放大 → 输出成片。详见 `video_editor.py`。
 
+**v2.0 分步审核流程（推荐，来自 Bonnie 实操经验）**：
+1. `python video_editor.py <素材> --transcribe-only` — 先转录，用户校对错字
+2. `python video_editor.py <脚本> --plan-only` — 出剪辑计划，用户审核
+3. 用户确认 → 全自动渲染 → 用户看片反馈 → 迭代修改
+
+**v2.0 新增能力**：
+- BGM 闪避混音（人声时自动降低背景音乐音量）
+- 中文字体自定义（`--font xxx.ttf`，解决乱码问题）
+- 转录校对模式（`--transcribe-only`）
+- 剪辑计划预览（`--plan-only`，不依赖素材）
+- Remotion 动画生成（截图复刻、打字机效果、音效字幕等，需安装 Remotion）
+
 ## 反馈录入
 
 用户发布后把数据告诉你，执行：
@@ -383,6 +395,9 @@ python viral_validator.py <脚本路径>     # 9 维爆款验证（27 分制）
 python pleasure_scorer.py <脚本路径>     # 爽点评分（12 分制）
 python douyin_extractor.py <链接> --asr --comments  # 提取抖音视频口播文案+评论
 python video_editor.py <脚本路径> <素材路径>          # 全自动剪辑（对齐+渲染）
-python video_editor.py <脚本路径> <素材路径> --align-only  # 只对齐检查，不渲染
-python video_editor.py <脚本路径> <素材路径> --dry-run     # 只生成剪辑指令
+python video_editor.py <素材路径> --transcribe-only   # 只转录素材，校对文本
+python video_editor.py <脚本路径> --plan-only         # 只出剪辑计划，不依赖素材
+python video_editor.py <脚本路径> <素材路径> --align-only  # 只对齐检查
+python video_editor.py <脚本路径> <素材路径> --font xxx.ttf  # 指定中文字体
+python video_editor.py <脚本路径> <素材路径> --bgm xxx.mp3   # 带BGM闪避混音
 ```
