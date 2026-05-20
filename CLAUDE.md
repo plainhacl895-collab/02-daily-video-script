@@ -34,6 +34,7 @@
 ├── viral_validator.py                # 9 维爆款验证器（27 分制）
 ├── pleasure_scorer.py                # 爽点评分器（12 分制）
 ├── douyin_extractor.py               # 抖音视频文案提取（基础+ASR）
+├── video_editor.py                   # ★ 视频自动剪辑引擎（脚本+素材→成片）
 ├── config/
 │   ├── persona.json                  # 人设配置（违禁词/偏好句式/金句库/价值观/IP定位）
 │   └── video_format_matrix.json      # ★ 画面形式决策矩阵（4方向×3支柱→3格式）
@@ -52,7 +53,8 @@
 │   └── layer4-feedback/              # 外界反应：客户咨询来源
 └── .claude/                          # Claude Code 技能配置
     └── skills/
-        └── douyin-extract.md         # 抖音视频文案提取技能
+        ├── douyin-extract.md         # 抖音视频文案提取技能
+        └── video-editor.md           # ★ 视频自动剪辑技能（4种模式）
 ```
 
 ## 人设铁律（每次生成必遵）
@@ -319,6 +321,20 @@ python pleasure_scorer.py <脚本文件路径>     # 爽点评分（12分制）
 - 小红书：#xxx #xxx
 ```
 
+### 8.7 自动剪辑（新增）
+
+脚本和拍摄都完成后，用户说"剪这条"即可触发 `video-editor` 技能（详见 `.claude/skills/video-editor.md`）。
+
+**四种模式**：
+| 模式 | 使用场景 | 命令 |
+|------|----------|------|
+| 全自动剪辑 | 脚本+素材都有，直接出片 | `python video_editor.py <脚本> <素材>` |
+| 对齐检查 | 素材质量不确定，先看对齐 | 加 `--align-only` |
+| 剪辑指令 | 还没拍，先生成指令 | 加 `--dry-run` |
+| 风格复刻 | 模仿参考视频的剪辑节奏 | 用户提供参考视频链接，Claude 逐秒拆解 |
+
+**核心能力**：Whisper 转录口播素材 → 与脚本自动对齐 → FFmpeg 自动裁剪/调速/字幕/画面放大 → 输出成片。详见 `video_editor.py`。
+
 ## 反馈录入
 
 用户发布后把数据告诉你，执行：
@@ -366,4 +382,7 @@ python engine.py analyze                 # 分析已发布数据，生成 insigh
 python viral_validator.py <脚本路径>     # 9 维爆款验证（27 分制）
 python pleasure_scorer.py <脚本路径>     # 爽点评分（12 分制）
 python douyin_extractor.py <链接> --asr --comments  # 提取抖音视频口播文案+评论
+python video_editor.py <脚本路径> <素材路径>          # 全自动剪辑（对齐+渲染）
+python video_editor.py <脚本路径> <素材路径> --align-only  # 只对齐检查，不渲染
+python video_editor.py <脚本路径> <素材路径> --dry-run     # 只生成剪辑指令
 ```
