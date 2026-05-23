@@ -103,6 +103,7 @@ class VideoEngine:
             "pillar_distribution": {"Market": 0, "Property": 0, "Story": 0},
             "last_strategies": [],
             "last_angles": [],
+            "community_coverage": {},
             "max_window": 30,
         }
 
@@ -183,6 +184,17 @@ class VideoEngine:
         records_all = self.history.get("records", [])
         strat_counts = Counter(r.get("strategy", "") for r in records_all[-20:] if r.get("strategy"))
 
+        # Series progress
+        series_status = self.get_series_status()
+
+        # Suggest next community: first district with uncovered communities
+        next_community = None
+        for d in self.persona.get("ip_positioning", {}).get("core_districts", []):
+            st = series_status.get(d, {})
+            if st.get("remaining"):
+                next_community = {"district": d, "community": st["remaining"][0]}
+                break
+
         return {
             "date": target_date.strftime("%Y-%m-%d"),
             "pillar": pillar,
@@ -196,6 +208,8 @@ class VideoEngine:
             "direction_weights": self.persona.get("ip_positioning", {}).get("direction_weights", {}),
             "direction_to_lane": self.persona.get("ip_positioning", {}).get("direction_to_lane", {}),
             "strategy_distribution": dict(strat_counts),
+            "series_status": series_status,
+            "next_community": next_community,
         }
 
     def _select_pillar(self, pillar_dist):
@@ -295,6 +309,10 @@ class VideoEngine:
             "pleasure_score": meta.get("pleasure_score", 0),
             "persona_score": meta.get("persona_score", 0),
             "thesis": meta.get("thesis", ""),
+            "community": meta.get("community", ""),
+            "district": meta.get("district", ""),
+            "series": meta.get("series", ""),
+            "episode": meta.get("episode", 0),
             "performance": {"published": False},
         }
 
@@ -324,8 +342,230 @@ class VideoEngine:
                 pillar_counts[p] += 1
         self.history["pillar_distribution"] = pillar_counts
 
+        # Track community coverage per district
+        cc = self.history.get("community_coverage", {})
+        district = meta.get("district", "")
+        community = meta.get("community", "")
+        if district and community:
+            if district not in cc:
+                cc[district] = {}
+            if community not in cc[district]:
+                cc[district][community] = {"count": 0, "episodes": []}
+            cc[district][community]["count"] += 1
+            ep = meta.get("episode", 0)
+            if ep:
+                cc[district][community]["episodes"].append(ep)
+            cc[district][community]["last_date"] = today
+        self.history["community_coverage"] = cc
+
         self._save_history()
         return record
+
+    def get_series_status(self, district=None):
+        """查询系列拍摄进度——哪些小区已拍、哪些待拍。
+
+        若指定 district，只返回该板块；否则返回全部。
+        返回格式: {板块名: {'covered': [...], 'remaining': [...]}}
+        """
+        cc = self.history.get("community_coverage", {})
+        persona_districts = self.persona.get("ip_positioning", {}).get("core_districts", [])
+        extended = self.persona.get("ip_positioning", {}).get("extended_districts", [])
+
+        # Load known communities from CSV
+        csv_path = self.root.parent / "03-shanghai-community-analysis" / "小区对比总表.csv"
+        known_by_district = {}  # keyed by persona-format name
+        if csv_path.exists():
+            import csv
+            with open(csv_path, encoding='utf-8-sig') as f:
+                reader = csv.DictReader(f)
+                for row in reader:
+                    d_short = row.get('板块', '').strip()
+                    c = row.get('小区名称', '').strip()
+                    if not d_short or not c:
+                        continue
+                    # Map CSV short name to persona long name
+                    d_key = d_short
+                    for pd_name in persona_districts + extended:
+                        if pd_name.endswith('·' + d_short):
+                            d_key = pd_name
+                            break
+                    if d_key not in known_by_district:
+                        known_by_district[d_key] = []
+                    known_by_district[d_key].append(c)
+
+        # Build covered lookup: check both persona long name and csv short name
+        covered_by_district = {}
+        for cc_key, communities in cc.items():
+            # Normalize to persona format
+            mapped_key = cc_key
+            if '·' not in cc_key:
+                for pd_name in persona_districts + extended:
+                    if pd_name.endswith('·' + cc_key):
+                        mapped_key = pd_name
+                        break
+            covered_by_district[mapped_key] = list(communities.keys())
+
+        target_districts = [district] if district else persona_districts + extended
+        result = {}
+        for d in target_districts:
+            known = known_by_district.get(d, [])
+            covered = covered_by_district.get(d, [])
+            remaining = [c for c in known if c not in covered]
+            result[d] = {
+                "total_known": len(known),
+                "covered": covered,
+                "covered_count": len(covered),
+                "remaining": remaining,
+                "remaining_count": len(remaining),
+            }
+
+        return result
+
+    def get_community_listings(self, community_name=None):
+        """读取 daily_followup.xlsm '房源' sheet，返回指定小区的在售房源摘要。
+
+        若 community_name 为 None，返回所有小区名列表（去重）。
+        若指定 community_name，返回该小区的：
+          - count: 在售套数
+          - avg_unit_price: 平均单价 (万/㎡)
+          - avg_total_price: 平均总价 (万)
+          - score_distribution: {9: n, 8: n, 7: n, 6: n, <6: n}
+          - best: 最高分房源 (面积/总价/单价/楼层/分数/硬伤/房龄)
+          - listings: 所有房源列表（最多返回 20 条）
+        """
+        # Locate the xlsm file
+        import csv as _csv
+        xlsm_paths = [
+            Path("D:/Unique work form/daily_followup.xlsm"),
+            self.root.parent / "01-Excel-Customer-Management" / "daily_followup.xlsm",
+        ]
+        xlsm_path = None
+        for p in xlsm_paths:
+            if p.exists():
+                xlsm_path = p
+                break
+
+        if xlsm_path is None:
+            return None
+
+        # Parse xlsm via zipfile + XML (same approach as 01 project)
+        import zipfile, xml.etree.ElementTree as ET
+        with zipfile.ZipFile(xlsm_path, 'r') as z:
+            # Load shared strings
+            with z.open('xl/sharedStrings.xml') as f:
+                tree = ET.parse(f)
+            ns = {'s': 'http://schemas.openxmlformats.org/spreadsheetml/2006/main'}
+            strings = []
+            for si in tree.findall('.//s:si', ns):
+                text = ''.join(t.text or '' for t in si.findall('.//s:t', ns))
+                strings.append(text)
+
+            # Read sheet5 (房源)
+            with z.open('xl/worksheets/sheet5.xml') as f:
+                ws_tree = ET.parse(f)
+
+            rows = ws_tree.findall('.//s:row', ns)
+            # Data starts at row 4 (row 3 is header)
+            communities = {}  # {name: [listing, ...]}
+            for row in rows:
+                rn = int(row.get('r', 0))
+                if rn < 4:
+                    continue
+
+                cells = row.findall('s:c', ns)
+                cell_vals = {}
+                for c in cells:
+                    col_letter = ''.join(ch for ch in c.get('r', '') if ch.isalpha())
+                    v = c.find('s:v', ns)
+                    t = c.get('t', '')
+                    val = ''
+                    if v is not None and v.text:
+                        if t == 's':
+                            idx = int(v.text)
+                            val = strings[idx] if idx < len(strings) else ''
+                        else:
+                            val = v.text
+                    cell_vals[col_letter] = val
+
+                # Extract columns of interest
+                name = cell_vals.get('C', '').strip()  # col C = 小区
+                if not name:
+                    continue
+
+                try:
+                    area = float(cell_vals.get('E', 0) or 0)
+                except ValueError:
+                    area = 0
+                try:
+                    total_price = float(cell_vals.get('F', 0) or 0)
+                except ValueError:
+                    total_price = 0
+                try:
+                    unit_price = float(cell_vals.get('G', 0) or 0)
+                except ValueError:
+                    unit_price = 0
+                floor = cell_vals.get('H', '').strip()
+                try:
+                    score = float(cell_vals.get('I', 0) or 0)
+                except ValueError:
+                    score = 0
+                listing_time = cell_vals.get('J', '').strip()
+                flaw = cell_vals.get('K', '').strip()
+                age = cell_vals.get('L', '').strip()
+
+                listing = {
+                    'area': area,
+                    'total_price': total_price,
+                    'unit_price': unit_price,
+                    'floor': floor,
+                    'score': score,
+                    'listing_time': listing_time,
+                    'flaw': flaw,
+                    'age': age,
+                }
+
+                if name not in communities:
+                    communities[name] = []
+                communities[name].append(listing)
+
+        # Return all names or specific community data
+        if community_name is None:
+            return sorted(communities.keys())
+
+        listings = communities.get(community_name, [])
+        if not listings:
+            return None
+
+        # Compute stats
+        total_prices = [l['total_price'] for l in listings if l['total_price'] > 0]
+        unit_prices = [l['unit_price'] for l in listings if l['unit_price'] > 0]
+        scored = [l for l in listings if l['score'] > 0]
+        scored.sort(key=lambda l: l['score'], reverse=True)
+
+        score_dist = {'9+': 0, '8-9': 0, '7-8': 0, '6-7': 0, '<6': 0}
+        for l in listings:
+            s = l['score']
+            if s >= 9:
+                score_dist['9+'] += 1
+            elif s >= 8:
+                score_dist['8-9'] += 1
+            elif s >= 7:
+                score_dist['7-8'] += 1
+            elif s >= 6:
+                score_dist['6-7'] += 1
+            elif s > 0:
+                score_dist['<6'] += 1
+
+        return {
+            'count': len(listings),
+            'avg_total_price': round(sum(total_prices) / len(total_prices)) if total_prices else 0,
+            'avg_unit_price': round(sum(unit_prices) / len(unit_prices), 1) if unit_prices else 0,
+            'min_total_price': min(total_prices) if total_prices else 0,
+            'max_total_price': max(total_prices) if total_prices else 0,
+            'score_distribution': score_dist,
+            'best': scored[0] if scored else None,
+            'listings': scored[:20],
+        }
 
     def record_feedback(self, date_str, metrics):
         records = self.history.get("records", [])
@@ -451,6 +691,8 @@ def main():
         print("用法:")
         print("  python engine.py status [--no-venue]  查看今日策略和近期状态")
         print("  python engine.py history [n]          查看最近 n 条记录")
+        print("  python engine.py series [板块]        查看系列拍摄进度")
+        print("  python engine.py listings [小区名]    查询优质房源表（不填则列所有小区）")
         print("  python engine.py analyze              生成表现洞察")
         return
 
@@ -511,6 +753,30 @@ def main():
                 target = weight / total_w * 100
                 bar = "#" * int(actual / 5) + "-" * (20 - int(actual / 5))
                 print(f"  {direction:6s}({lane:6s}) 目标{target:.0f}% 实际{actual:.0f}% [{bar}]")
+
+        # 系列拍摄进度
+        ss = s.get("series_status", {})
+        nc = s.get("next_community")
+        if ss:
+            print(f"\n[系列] 拍摄进度:")
+            for d_name, d_info in ss.items():
+                total = d_info.get("total_known", 0)
+                cov = d_info.get("covered_count", 0)
+                rem = d_info.get("remaining_count", 0)
+                if total == 0:
+                    continue
+                bar_len = 20
+                filled = int(cov / total * bar_len) if total > 0 else 0
+                bar = "█" * filled + "░" * (bar_len - filled)
+                remaining_list = d_info.get("remaining", [])
+                remaining_preview = ", ".join(remaining_list[:3])
+                if len(remaining_list) > 3:
+                    remaining_preview += f" 等{len(remaining_list)}个"
+                print(f"  {d_name:8s} [{bar}] {cov}/{total}")
+                if remaining_list:
+                    print(f"           待拍: {remaining_preview}")
+            if nc:
+                print(f"\n  → 推荐下一个: {nc['district']}·{nc['community']}")
         print()
 
     elif cmd == "history":
@@ -519,6 +785,56 @@ def main():
             pub = "[已发布]" if r.get("performance", {}).get("published") else "[待发布]"
             print(f"{r['date']} {pub} {r.get('strategy','?'):8s} {r.get('pillar','?'):8s} {str(r.get('topic',''))[:25]}")
         print()
+
+    elif cmd == "series":
+        district = sys.argv[2] if len(sys.argv) > 2 else None
+        ss = engine.get_series_status(district)
+        if not ss:
+            print("\n暂无系列数据\n")
+            return
+        print(f"\n[系列] 拍摄进度\n")
+        for d_name, d_info in ss.items():
+            total = d_info.get("total_known", 0)
+            if total == 0:
+                continue
+            cov = d_info.get("covered_count", 0)
+            rem = d_info.get("remaining_count", 0)
+            filled = int(cov / total * 20) if total > 0 else 0
+            bar = "█" * filled + "░" * (20 - filled)
+            print(f"  {d_name:6s} [{bar}] {cov}/{total}")
+            if d_info.get("covered"):
+                print(f"         已拍: {', '.join(d_info['covered'])}")
+            if d_info.get("remaining"):
+                print(f"         待拍: {', '.join(d_info['remaining'])}")
+            print()
+        print()
+
+    elif cmd == "listings":
+        community = sys.argv[2] if len(sys.argv) > 2 else None
+        result = engine.get_community_listings(community)
+        if result is None:
+            print("\n[!] 未找到房源数据，请确认 daily_followup.xlsm 是否存在\n")
+            return
+        if community is None:
+            print(f"\n[房源] 共 {len(result)} 个小区有优质在售房源\n")
+            for name in result[:30]:
+                print(f"  {name}")
+            if len(result) > 30:
+                print(f"  ... 共 {len(result)} 个")
+            print()
+        else:
+            info = result
+            print(f"\n[房源] {community} — 在售 {info['count']} 套")
+            print(f"  均价: {info['avg_unit_price']} 万/㎡ | 总价: {info['min_total_price']}-{info['max_total_price']} 万")
+            print(f"  分数分布: 9+={info['score_distribution']['9+']} | 8-9={info['score_distribution']['8-9']} | 7-8={info['score_distribution']['7-8']} | 6-7={info['score_distribution']['6-7']}")
+            best = info.get('best')
+            if best:
+                print(f"  最佳: {best['area']}㎡ {best['total_price']}万 ({best['unit_price']}万/㎡) 分{best['score']} {best['floor']} {best['flaw']} {best['age']}")
+            if info['count'] <= 15:
+                print(f"\n  全部房源:")
+                for i, l in enumerate(info['listings']):
+                    print(f"  {i+1}. {l['area']}㎡ {l['total_price']}万 ({l['unit_price']}万/㎡) {l['floor']} 分{l['score']} {l['flaw']}")
+            print()
 
     elif cmd == "analyze":
         r = engine.analyze()

@@ -28,26 +28,77 @@ class ViralScriptValidator:
         text = re.sub(r'##.*\n', '', text)
         word_count = len(text.replace(' ', '').replace('\n', ''))
         
-        # 1. 黄金 3 秒钩子检查
+        # 1. 黄金 3 秒钩子检查（v3.0 升级：张力度检测取代关键词匹配）
         hook_section = self._extract_section(script, '开场')
         hook_score = 0
         if hook_section:
-            hook_keywords = ['劝退', '别买', '为什么', '怎么办', '今天', '刚',
-                           '最近', '发现', '跟你说', '老实说', '有个情况',
-                           '有意思', '值得说', '说真的']
-            hook_has_keyword = any(kw in hook_section for kw in hook_keywords)
-            hook_has_question = '?' in hook_section or '？' in hook_section
-            hook_has_number = bool(re.search(r'\d+', hook_section))
-            
-            if hook_has_keyword:
-                hook_score += 3
-            if hook_has_question:
+            # 1a. 数字张力 — 两个可比数字之间有显著差距（≥15%）或单数字+惊人词
+            gap_score = 0
+            numbers = re.findall(r'(\d+(?:\.\d+)?)\s*(万|套|平|折|%|成|倍|个|年|月|天|层)', hook_section)
+            if len(numbers) >= 2:
+                for i in range(len(numbers)):
+                    for j in range(i + 1, len(numbers)):
+                        n1, u1 = float(numbers[i][0]), numbers[i][1]
+                        n2, u2 = float(numbers[j][0]), numbers[j][1]
+                        if u1 != u2 or n1 == 0 or n2 == 0:
+                            continue
+                        gap = abs(n1 - n2) / max(n1, n2)
+                        if gap >= 0.15:
+                            gap_score = 2
+                            break
+                    if gap_score:
+                        break
+            if gap_score == 0 and len(numbers) >= 1:
+                gap_score = 1  # 有数字但无显著落差
+            hook_score += gap_score
+
+            # 1b. 反常识 — '以为/觉得' + '但/其实/实际上' 结构
+            reversal = re.search(
+                r'(以为|觉得|本来|原本|看上去|听起来|都说|大家都).{0,30}(但|却|其实|实际上|没想到|才发现)',
+                hook_section
+            )
+            if reversal:
                 hook_score += 2
-            if hook_has_number:
+            else:
+                # 降级：至少有一个强转折词且前后各有实际内容
+                if re.search(r'.{10,}(但|却|其实|实际上|然而|不过).{10,}', hook_section):
+                    hook_score += 1
+
+            # 1c. 对比冲突 — 两个同维度事物的直接对撞
+            contrast_patterns = [
+                r'(\S+)\s*(和|跟|比|vs\.?|VS\.?|差|不如|没有|还不如)\s*(\S+)',  # A vs B
+                r'(\S+).{0,10}(却|反而|倒|倒是|却反而).{0,10}(\S+)',  # A...却...B 并列对撞
+                r'(\S+).{0,5}(卖不动|抢着买|没人要|没人看|没人买).+(\S+).{0,5}(卖不动|抢着买|没人要|没人看|没人买)',  # 行为对撞
+            ]
+            contrast = None
+            for pat in contrast_patterns:
+                contrast = re.search(pat, hook_section)
+                if contrast:
+                    break
+            if contrast:
+                hook_score += 2
+
+            # 1d. 具体排除 — 否定 + 具体对象 + 原因
+            exclusion = re.search(
+                r'(不推荐|不要选|别买|排除|跳过|pass|不建议).{0,25}(因为|原因是|问题在于)',
+                hook_section, re.IGNORECASE
+            )
+            if exclusion:
                 hook_score += 1
-            
-            if hook_score < 3:
-                issues.append("钩子不够尖锐（缺少反常识/痛点/数据）")
+
+            # 将原始评分 (0-7) 映射到 0-3
+            hook_score = min(hook_score, 7)
+            if hook_score >= 5:
+                hook_score = 3
+            elif hook_score >= 3:
+                hook_score = 2
+            elif hook_score >= 1:
+                hook_score = 1
+
+            if hook_score <= 1:
+                issues.append("钩子缺乏张力（无数字落差/反常识/对比冲突/具体排除中的任一项）")
+            elif hook_score == 2:
+                issues.append("钩子张力偏弱（可继续加强：补充对比数据或认知反转）")
         else:
             issues.append("缺少开场钩子")
         scores['黄金3秒钩子'] = hook_score
