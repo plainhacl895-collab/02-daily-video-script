@@ -1,7 +1,67 @@
 {
-  "records": [],
-  "pillar_distribution": {"Market": 0, "Property": 0, "Story": 0},
-  "last_strategies": [],
+  "records": [
+    {
+      "date": "2026-05-22",
+      "strategy": "陪伴决策",
+      "pillar": "Property",
+      "video_format": "property_walk",
+      "bgm_type": "温暖钢琴",
+      "scene": "新天地河滨花园",
+      "tags": [
+        "上海买房",
+        "长宁改善置换",
+        "天山板块",
+        "苏州河"
+      ],
+      "cover_concept": "1,450万·天山苏州河景",
+      "shining_type": "",
+      "hook_type": "反直觉对比",
+      "topic": "新天地河滨花园vs仁恒河滨花园",
+      "word_count": 380,
+      "duration_sec": 72,
+      "pleasure_score": 4,
+      "persona_score": 0,
+      "thesis": "天山板块最贵的不是仁恒而是没有会所的新天地——因为它把住这件事本身做到了极致",
+      "performance": {
+        "published": false
+      }
+    },
+    {
+      "date": "2026-05-23",
+      "strategy": "陪伴决策",
+      "pillar": "Property",
+      "video_format": "property_walk",
+      "bgm_type": "温柔钢琴",
+      "scene": "新天地河滨花园",
+      "tags": [
+        "上海买房",
+        "长宁改善置换",
+        "天山板块",
+        "苏州河"
+      ],
+      "cover_concept": "1,450万苏州河景·但连游泳池都没有",
+      "shining_type": "",
+      "hook_type": "画面反差（河景vs无会所）",
+      "topic": "新天地河滨花园138㎡三房",
+      "word_count": 320,
+      "duration_sec": 68,
+      "pleasure_score": 5,
+      "persona_score": 0,
+      "thesis": "河景是面子，邻居是底子",
+      "performance": {
+        "published": false
+      }
+    }
+  ],
+  "pillar_distribution": {
+    "Market": 0,
+    "Property": 2,
+    "Story": 0
+  },
+  "last_strategies": [
+    "陪伴决策",
+    "陪伴决策"
+  ],
   "last_angles": [],
   "max_window": 30
 }
