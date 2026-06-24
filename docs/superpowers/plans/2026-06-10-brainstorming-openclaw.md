@@ -1,3 +1,10 @@
+---
+title: Brainstorming 技能 OpenClaw 移植实施计划
+description: 将 Claude Code 的 brainstorming SKILL.md 转换为 OpenClaw 格式
+date: 2026-06-10
+tags: [plan, openclaw, brainstorming, platform-migration]
+---
+
 # Brainstorming 技能 OpenClaw 移植 —— 实施计划
 
 > **For agentic workers:** 单文件任务，直接执行即可。

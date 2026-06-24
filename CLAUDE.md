@@ -1,3 +1,9 @@
+---
+title: 佳佳短视频生产系统
+description: Claude Code 驱动的个人IP短视频生产系统，打造"佳佳 = 上海板块分析专家"，主攻微信视频号 + 小红书
+tags: [video, script, real-estate, content-creation, personal-ip]
+---
+
 # CLAUDE.md
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.

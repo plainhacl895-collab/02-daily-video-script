@@ -1,3 +1,8 @@
+---
+name: bgm
+description: BGM选择指南——按内容类型推荐BGM风格、音量规则、技术实现
+---
+
 # BGM 选择指南
 
 ## BGM 的核心作用

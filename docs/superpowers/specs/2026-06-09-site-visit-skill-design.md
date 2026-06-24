@@ -1,3 +1,11 @@
+---
+title: 踩盘技能设计
+description: 线上信息 + 实地踩盘 = 不可替代的独家素材，设计线上预研→定制清单→踩盘后录入的三步流程
+date: 2026-06-09
+status: 待实现
+tags: [skill-design, site-visit, fieldwork]
+---
+
 # 踩盘技能设计 — site-visit.md
 
 日期：2026-06-09 | 状态：待实现

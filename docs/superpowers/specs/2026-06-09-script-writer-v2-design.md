@@ -1,3 +1,11 @@
+---
+title: Script Writer Skill v2 设计
+description: 在不推翻现有 9 步流程的前提下，把情绪驱动能力嵌入到工作流中
+date: 2026-06-09
+status: 待审批
+tags: [skill-design, script-writer, emotion, learning]
+---
+
 # Script Writer Skill v2 — 情绪维度 + 学习路径
 
 日期：2026-06-09 | 状态：待审批

@@ -1,3 +1,10 @@
+---
+title: Brainstorming 技能 OpenClaw 移植设计
+description: 将 Claude Code 的 brainstorming 技能以纯格式转换方式移植到 OpenClaw
+date: 2026-06-10
+tags: [skill-design, openclaw, brainstorming, platform-migration]
+---
+
 # Brainstorming 技能 OpenClaw 移植设计
 
 ## 目标
